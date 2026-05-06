@@ -104,7 +104,7 @@ class _AnimatedBubble extends StatelessWidget {
   }
 }
 
-class _UserBubble extends StatelessWidget {
+class _UserBubble extends StatefulWidget {
   const _UserBubble({
     required this.message,
     this.onCopy,
@@ -118,48 +118,113 @@ class _UserBubble extends StatelessWidget {
   final VoidCallback? onEdit;
 
   @override
+  State<_UserBubble> createState() => _UserBubbleState();
+}
+
+class _UserBubbleState extends State<_UserBubble> {
+  bool _actionsVisible = false;
+  Offset? _pointerDownPos;
+  DateTime? _pointerDownAt;
+
+  void _toggleActions() {
+    setState(() => _actionsVisible = !_actionsVisible);
+  }
+
+  void _onPointerDown(PointerDownEvent event) {
+    _pointerDownPos = event.position;
+    _pointerDownAt = DateTime.now();
+  }
+
+  void _onPointerUp(PointerUpEvent event) {
+    final start = _pointerDownPos;
+    final startedAt = _pointerDownAt;
+    _pointerDownPos = null;
+    _pointerDownAt = null;
+    if (start == null || startedAt == null) return;
+    // Detect a quick tap: short duration AND minimal movement, so we don't
+    // toggle on long-press (which is reserved for system text selection) or
+    // on scroll drags.
+    final dt = DateTime.now().difference(startedAt);
+    final delta = (event.position - start).distance;
+    if (dt.inMilliseconds < 300 && delta < 10) {
+      _toggleActions();
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+
+    final bubbleBorderRadius = BorderRadius.circular(
+      18,
+    ).copyWith(bottomRight: const Radius.circular(4));
 
     return Align(
       alignment: Alignment.centerRight,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          Container(
-            constraints: BoxConstraints(
-              maxWidth: MediaQuery.of(context).size.width * 0.75,
-            ),
-            margin: const EdgeInsets.only(left: 48, right: 8, top: 4, bottom: 2),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF3B82F6) : const Color(0xFF2563EB),
-              borderRadius: BorderRadius.circular(
-                18,
-              ).copyWith(bottomRight: const Radius.circular(4)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                if (message.attachmentPaths != null &&
-                    message.attachmentPaths!.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: _AttachmentList(
-                      paths: message.attachmentPaths!,
-                      isUser: true,
-                    ),
-                  ),
-                MarkdownBody(
-                  data: message.content,
-                  selectable: true,
-                  styleSheet: MarkdownStyleSheet(
-                    p: TextStyle(color: Colors.white, fontSize: 15, height: 1.4),
-                  ),
-                  shrinkWrap: true,
+          Listener(
+            // Listener observes raw pointer events without participating in
+            // the gesture arena, so it sees taps on text even when
+            // SelectionArea/MarkdownBody claim the gesture.
+            onPointerDown: _onPointerDown,
+            onPointerUp: _onPointerUp,
+            child: Container(
+              constraints: BoxConstraints(
+                maxWidth: MediaQuery.of(context).size.width * 0.75,
+              ),
+              margin: const EdgeInsets.only(
+                left: 48,
+                right: 8,
+                top: 4,
+                bottom: 2,
+              ),
+              decoration: BoxDecoration(
+                color: isDark
+                    ? const Color(0xFF3B82F6)
+                    : const Color(0xFF2563EB),
+                borderRadius: bubbleBorderRadius,
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
                 ),
-              ],
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    if (widget.message.attachmentPaths != null &&
+                        widget.message.attachmentPaths!.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: _AttachmentList(
+                          paths: widget.message.attachmentPaths!,
+                          isUser: true,
+                        ),
+                      ),
+                    // SelectionArea + selectable:false provides system text
+                    // selection on long-press at a higher level, leaving the
+                    // outer Listener free to detect quick taps for toggling
+                    // the action bar.
+                    SelectionArea(
+                      child: MarkdownBody(
+                        data: widget.message.content,
+                        selectable: false,
+                        styleSheet: MarkdownStyleSheet(
+                          p: TextStyle(
+                            color: Colors.white,
+                            fontSize: 15,
+                            height: 1.4,
+                          ),
+                        ),
+                        shrinkWrap: true,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
           Padding(
@@ -168,7 +233,7 @@ class _UserBubble extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  _formatTime(message.createdAt),
+                  _formatTime(widget.message.createdAt),
                   style: TextStyle(
                     fontSize: 11,
                     color: isDark
@@ -176,16 +241,44 @@ class _UserBubble extends StatelessWidget {
                         : const Color(0xFF999999),
                   ),
                 ),
-                if (message.status == MessageStatus.error) ...[
+                if (widget.message.status == MessageStatus.error) ...[
                   const SizedBox(width: 4),
                   Icon(Icons.error_outline, size: 14, color: Colors.red[200]),
                 ],
-                const SizedBox(width: 8),
-                MessageActionBar(
-                  content: message.content,
-                  onCopy: onCopy,
-                  onDelete: onDelete,
-                  onEdit: onEdit,
+                ClipRect(
+                  child: AnimatedSlide(
+                    duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeOutCubic,
+                    offset: _actionsVisible
+                        ? Offset.zero
+                        : const Offset(0.4, 0),
+                    child: AnimatedOpacity(
+                      duration: const Duration(milliseconds: 200),
+                      curve: Curves.easeOutCubic,
+                      opacity: _actionsVisible ? 1.0 : 0.0,
+                      child: AnimatedAlign(
+                        duration: const Duration(milliseconds: 200),
+                        curve: Curves.easeOutCubic,
+                        alignment: Alignment.centerLeft,
+                        widthFactor: _actionsVisible ? 1.0 : 0.0,
+                        child: IgnorePointer(
+                          ignoring: !_actionsVisible,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const SizedBox(width: 8),
+                              MessageActionBar(
+                                content: widget.message.content,
+                                onCopy: widget.onCopy,
+                                onDelete: widget.onDelete,
+                                onEdit: widget.onEdit,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
               ],
             ),
