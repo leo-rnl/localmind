@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:hugeicons/hugeicons.dart';
+import '../../../../core/models/enums.dart';
 import '../../../../core/providers/app_providers.dart';
 import '../../../conversations/providers/conversation_providers.dart' as conv;
+import '../../../servers/providers/server_providers.dart';
 import '../../providers/chat_mcp_providers.dart';
 
 class ChatSettingsSheet extends ConsumerStatefulWidget {
@@ -44,6 +46,25 @@ class _ChatSettingsSheetState extends ConsumerState<ChatSettingsSheet> {
         activeConv?.topP != null ||
         activeConv?.maxTokens != null ||
         activeConv?.contextLength != null;
+
+    // Whether the user-set max_tokens / context_length will actually be sent.
+    // When 'Prefer server defaults' is on AND the active server has a model
+    // currently loaded, we omit those two fields from the request — so the
+    // sliders should look disabled to make this visible.
+    final activeServer = ref.watch(activeServerProvider);
+    final serverSupportsDefaults = switch (activeServer?.type) {
+      ServerType.lmStudio ||
+      ServerType.openAICompatible ||
+      ServerType.ollama => true,
+      _ => false,
+    };
+    final loadedModelsAsync = activeServer != null && serverSupportsDefaults
+        ? ref.watch(loadedModelsProvider(activeServer))
+        : null;
+    final hasLoadedModel = loadedModelsAsync?.value?.isNotEmpty ?? false;
+    final loadParamsIgnored = settings.preferServerDefaults &&
+        serverSupportsDefaults &&
+        hasLoadedModel;
 
     final isGloballyEnabled = settings.mcpEnabled;
 
@@ -111,6 +132,7 @@ class _ChatSettingsSheetState extends ConsumerState<ChatSettingsSheet> {
                     contextLength,
                     activeConv?.id,
                     isDark,
+                    loadParamsIgnored,
                   ),
                   child: const Row(
                     children: [
@@ -152,6 +174,7 @@ class _ChatSettingsSheetState extends ConsumerState<ChatSettingsSheet> {
     int contextLength,
     String? conversationId,
     bool isDark,
+    bool loadParamsIgnored,
   ) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 16),
@@ -185,9 +208,13 @@ class _ChatSettingsSheetState extends ConsumerState<ChatSettingsSheet> {
                 child: _ParamInput(
                   label: 'Max Tokens',
                   value: maxTokens,
-                  description: 'Response limit',
-                  onChanged: (v) => _updateParam(ref, conversationId, maxTokens: v),
+                  description: loadParamsIgnored
+                      ? 'Using server default'
+                      : 'Response limit',
+                  onChanged: (v) =>
+                      _updateParam(ref, conversationId, maxTokens: v),
                   isDark: isDark,
+                  disabled: loadParamsIgnored,
                 ),
               ),
               const SizedBox(width: 16),
@@ -195,9 +222,13 @@ class _ChatSettingsSheetState extends ConsumerState<ChatSettingsSheet> {
                 child: _ParamInput(
                   label: 'Context Length',
                   value: contextLength,
-                  description: 'History window',
-                  onChanged: (v) => _updateParam(ref, conversationId, contextLength: v),
+                  description: loadParamsIgnored
+                      ? 'Using server default'
+                      : 'History window',
+                  onChanged: (v) =>
+                      _updateParam(ref, conversationId, contextLength: v),
                   isDark: isDark,
+                  disabled: loadParamsIgnored,
                 ),
               ),
             ],
@@ -472,6 +503,7 @@ class _ParamInput extends StatelessWidget {
     required this.description,
     required this.onChanged,
     required this.isDark,
+    this.disabled = false,
   });
 
   final String label;
@@ -479,34 +511,52 @@ class _ParamInput extends StatelessWidget {
   final String description;
   final ValueChanged<int> onChanged;
   final bool isDark;
+  final bool disabled;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-        ),
-        const SizedBox(height: 8),
-        ShadInput(
-          initialValue: value.toString(),
-          keyboardType: TextInputType.number,
-          onChanged: (v) {
-            final val = int.tryParse(v);
-            if (val != null) onChanged(val);
-          },
-        ),
-        const SizedBox(height: 4),
-        Text(
-          description,
-          style: TextStyle(
-            fontSize: 11,
-            color: isDark ? Colors.white54 : Colors.black54,
+    final dimmedLabelColor = isDark ? Colors.white38 : Colors.black38;
+    final descriptionColor = disabled
+        ? (isDark ? Colors.white60 : Colors.black54)
+        : (isDark ? Colors.white54 : Colors.black54);
+
+    return Opacity(
+      opacity: disabled ? 0.6 : 1.0,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              fontSize: 14,
+              color: disabled ? dimmedLabelColor : null,
+            ),
           ),
-        ),
-      ],
+          const SizedBox(height: 8),
+          IgnorePointer(
+            ignoring: disabled,
+            child: ShadInput(
+              initialValue: value.toString(),
+              keyboardType: TextInputType.number,
+              enabled: !disabled,
+              onChanged: (v) {
+                final val = int.tryParse(v);
+                if (val != null) onChanged(val);
+              },
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            description,
+            style: TextStyle(
+              fontSize: 11,
+              color: descriptionColor,
+              fontStyle: disabled ? FontStyle.italic : FontStyle.normal,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

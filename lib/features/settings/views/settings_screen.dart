@@ -180,6 +180,32 @@ class SettingsViews extends ConsumerWidget {
             isDark: isDark,
             icon: Icons.computer,
           ),
+          if (_supportsServerDefaults(_resolveSelectedServerType(
+            ref.watch(serversProvider).value ?? const [],
+            settings.defaultServerId,
+          ))) ...[
+            _ToggleSetting(
+              label: 'Prefer server defaults',
+              value: settings.preferServerDefaults,
+              onChanged: (v) => ref
+                  .read(settingsProvider.notifier)
+                  .setPreferServerDefaults(v),
+              isDark: isDark,
+            ),
+            Padding(
+              padding: const EdgeInsets.only(left: 16, right: 16, bottom: 8),
+              child: Text(
+                'Reuse the model and its settings already loaded on LM '
+                'Studio or Ollama instead of spawning a duplicate instance.',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: isDark
+                      ? const Color(0xFF888888)
+                      : const Color(0xFF999999),
+                ),
+              ),
+            ),
+          ],
           const Divider(height: 32),
           _SectionHeader(title: 'Default Persona'),
           _DropdownSetting(
@@ -261,6 +287,32 @@ class SettingsViews extends ConsumerWidget {
       ),
     );
   }
+}
+
+bool _supportsServerDefaults(ServerType? type) {
+  switch (type) {
+    case ServerType.lmStudio:
+    case ServerType.openAICompatible:
+    case ServerType.ollama:
+      return true;
+    case ServerType.openRouter:
+    case ServerType.onDevice:
+    case null:
+      return false;
+  }
+}
+
+ServerType? _resolveSelectedServerType(
+  List<dynamic> servers,
+  String? defaultServerId,
+) {
+  if (defaultServerId == null) return null;
+  for (final server in servers) {
+    if (server.id == defaultServerId) {
+      return server.type as ServerType;
+    }
+  }
+  return null;
 }
 
 class _SectionHeader extends StatelessWidget {

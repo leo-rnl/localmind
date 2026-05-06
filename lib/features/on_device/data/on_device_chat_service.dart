@@ -28,7 +28,10 @@ class OnDeviceChatService implements ChatService {
     required ChatParameters params,
     List<McpIntegration>? integrations,
     String? previousResponseId,
+    bool preferServerDefaults = false,
   }) {
+    // On-device runs entirely locally; preferServerDefaults is ignored —
+    // there is no remote loaded instance to defer to.
     // Cancel any previous inference before starting a new one
     cancelStream();
     _isCancelled = false;

@@ -78,8 +78,12 @@ final autoSelectFirstLoadedModelProvider = FutureProvider<void>((ref) async {
       final engine = ref.watch(onDeviceEngineProvider);
       loadedModels = engine.loadedModelId != null ? {engine.loadedModelId!} : {};
     } else {
-      final apiService = ref.read(serverApiServiceProvider);
-      loadedModels = await apiService.fetchRunningModels(activeServer);
+      // Use the cached provider so the result is shared with downstream
+      // readers (e.g. the preferServerDefaults check in sendMessage) instead
+      // of fetching a parallel copy.
+      loadedModels = await ref.read(
+        loadedModelsProvider(activeServer).future,
+      );
     }
 
     if (loadedModels.isEmpty) return;
@@ -594,6 +598,15 @@ class ChatNotifier extends Notifier<ChatState> {
 
     final messagesForApi = _buildMessagesForApi(selectedModel);
 
+    // Resolve preferServerDefaults: only effective when the user opted in AND
+    // a model is currently known to be loaded on the active server. Reads
+    // cached state only — no extra HTTP call. If the cache hasn't been
+    // populated yet we conservatively send the params (safer fallback).
+    final loadedModelsAsync = ref.read(loadedModelsProvider(server));
+    final hasLoadedModel = loadedModelsAsync.value?.isNotEmpty ?? false;
+    final preferServerDefaults =
+        settings.preferServerDefaults && hasLoadedModel;
+
     try {
       _streamSubscription?.cancel();
 
@@ -607,6 +620,7 @@ class ChatNotifier extends Notifier<ChatState> {
               modelId: selectedModel?.id ?? 'default',
               messages: messagesForApi,
               params: chatParams,
+              preferServerDefaults: preferServerDefaults,
             )
             .listen(
               (response) async {

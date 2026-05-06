@@ -29,6 +29,7 @@ class AppSettings {
   final bool hasAskedForNotifications;
   final bool mcpEnabled;
   final bool newChatMcpEnabled;
+  final bool preferServerDefaults;
   final SyntaxThemeName codeThemeDark;
   final SyntaxThemeName codeThemeLight;
   final LiteLmBackendType preferredBackend;
@@ -56,6 +57,7 @@ class AppSettings {
     this.hasAskedForNotifications = false,
     this.mcpEnabled = true,
     this.newChatMcpEnabled = true,
+    this.preferServerDefaults = false,
     this.codeThemeDark = SyntaxThemeName.dark,
     this.codeThemeLight = SyntaxThemeName.light,
     this.preferredBackend = LiteLmBackendType.cpu,
@@ -84,6 +86,7 @@ class AppSettings {
     bool? hasAskedForNotifications,
     bool? mcpEnabled,
     bool? newChatMcpEnabled,
+    bool? preferServerDefaults,
     SyntaxThemeName? codeThemeDark,
     SyntaxThemeName? codeThemeLight,
     LiteLmBackendType? preferredBackend,
@@ -114,6 +117,7 @@ class AppSettings {
           hasAskedForNotifications ?? this.hasAskedForNotifications,
       mcpEnabled: mcpEnabled ?? this.mcpEnabled,
       newChatMcpEnabled: newChatMcpEnabled ?? this.newChatMcpEnabled,
+      preferServerDefaults: preferServerDefaults ?? this.preferServerDefaults,
       codeThemeDark: codeThemeDark ?? this.codeThemeDark,
       codeThemeLight: codeThemeLight ?? this.codeThemeLight,
       preferredBackend: preferredBackend ?? this.preferredBackend,
@@ -144,6 +148,7 @@ class AppSettings {
       'hasAskedForNotifications': hasAskedForNotifications,
       'mcpEnabled': mcpEnabled,
       'newChatMcpEnabled': newChatMcpEnabled,
+      'preferServerDefaults': preferServerDefaults,
       'codeThemeDark': codeThemeDark.index,
       'codeThemeLight': codeThemeLight.index,
       'preferredBackend': preferredBackend.index,
@@ -174,6 +179,7 @@ class AppSettings {
       hasAskedForNotifications: map['hasAskedForNotifications'] ?? false,
       mcpEnabled: map['mcpEnabled'] ?? true,
       newChatMcpEnabled: map['newChatMcpEnabled'] ?? true,
+      preferServerDefaults: map['preferServerDefaults'] ?? false,
       codeThemeDark: SyntaxThemeName.values[map['codeThemeDark'] ?? 0],
       codeThemeLight: SyntaxThemeName.values[map['codeThemeLight'] ?? 1],
       preferredBackend: LiteLmBackendType.values[map['preferredBackend'] ?? 0],

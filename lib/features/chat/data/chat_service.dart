@@ -18,6 +18,7 @@ abstract class ChatService {
     required ChatParameters params,
     List<McpIntegration>? integrations,
     String? previousResponseId,
+    bool preferServerDefaults = false,
   });
 
   void cancelStream();
@@ -146,19 +147,28 @@ class LMStudioChatService implements ChatService {
     required ChatParameters params,
     List<McpIntegration>? integrations,
     String? previousResponseId,
+    bool preferServerDefaults = false,
   }) async* {
     _cancelToken = CancelToken();
 
+    // Per-request params (temperature, top_p) are always sent — they don't
+    // alter the loaded instance. Load-time params (max_output_tokens,
+    // context_length) are skipped when preferServerDefaults is on, since
+    // sending them with values that differ from the loaded instance forces
+    // LM Studio to spawn a duplicate instance.
     final body = <String, dynamic>{
       'model': modelId,
       'input': _formatInput(messages),
       'temperature': params.temperature,
       'top_p': params.topP,
-      'max_output_tokens': params.maxTokens,
-      'context_length': params.contextLength,
       'stream': true,
       'store': true,
     };
+
+    if (!preferServerDefaults) {
+      body['max_output_tokens'] = params.maxTokens;
+      body['context_length'] = params.contextLength;
+    }
 
     if (params.systemPrompt != null && params.systemPrompt!.isNotEmpty) {
       body['system_prompt'] = params.systemPrompt;
@@ -421,19 +431,23 @@ class OpenAICompatibleChatService implements ChatService {
     required ChatParameters params,
     List<McpIntegration>? integrations,
     String? previousResponseId,
+    bool preferServerDefaults = false,
   }) async* {
     _cancelToken = CancelToken();
 
-    final body = {
+    final body = <String, dynamic>{
       'model': modelId,
       'messages': messages
           .map((m) => {'role': _roleToString(m.role), 'content': m.content})
           .toList(),
       'temperature': params.temperature,
       'top_p': params.topP,
-      'max_tokens': params.maxTokens,
       'stream': true,
     };
+
+    if (!preferServerDefaults) {
+      body['max_tokens'] = params.maxTokens;
+    }
 
     Log.debug(
       'OpenAICompatible: Sending request to ${server.chatEndpoint} with model: $modelId',
@@ -604,20 +618,24 @@ class OllamaChatService implements ChatService {
     required ChatParameters params,
     List<McpIntegration>? integrations,
     String? previousResponseId,
+    bool preferServerDefaults = false,
   }) async* {
     _cancelToken = CancelToken();
 
-    final body = {
+    final options = <String, dynamic>{
+      'temperature': params.temperature,
+      'top_p': params.topP,
+    };
+    if (!preferServerDefaults) {
+      options['num_predict'] = params.maxTokens;
+    }
+    final body = <String, dynamic>{
       'model': modelId,
       'messages': messages
           .map((m) => {'role': _roleToString(m.role), 'content': m.content})
           .toList(),
       'stream': true,
-      'options': {
-        'temperature': params.temperature,
-        'top_p': params.topP,
-        'num_predict': params.maxTokens,
-      },
+      'options': options,
     };
 
     try {
@@ -689,7 +707,10 @@ class OpenRouterChatService implements ChatService {
     required ChatParameters params,
     List<McpIntegration>? integrations,
     String? previousResponseId,
+    bool preferServerDefaults = false,
   }) async* {
+    // OpenRouter is a cloud provider — always send params (no concept of a
+    // "loaded server-side instance"). preferServerDefaults is ignored here.
     _cancelToken = CancelToken();
 
     final body = {

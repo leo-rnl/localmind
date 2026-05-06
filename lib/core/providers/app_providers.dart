@@ -80,6 +80,8 @@ class SettingsNotifier extends Notifier<AppSettings> {
   void setMcpEnabled(bool value) => _update(state.copyWith(mcpEnabled: value));
   void setNewChatMcpEnabled(bool value) =>
       _update(state.copyWith(newChatMcpEnabled: value));
+  void setPreferServerDefaults(bool value) =>
+      _update(state.copyWith(preferServerDefaults: value));
   void setCodeThemeDark(SyntaxThemeName value) =>
       _update(state.copyWith(codeThemeDark: value));
   void setCodeThemeLight(SyntaxThemeName value) =>
